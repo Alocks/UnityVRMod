@@ -1,7 +1,6 @@
 ﻿using UnityVRMod.Config;
 using UnityVRMod.Core;
 using UnityVRMod.Features.Shared;
-using UniverseLib.Input;
 
 namespace UnityVRMod.Features.Debug
 {
@@ -69,7 +68,7 @@ namespace UnityVRMod.Features.Debug
                 if (_selectedSettingIndex != -1) DisplaySelectedSetting();
             }
 
-            if (InputManager.GetKeyDown(TEST_API_KEY))
+            if (VRModKeybind.IsTrustedKeyPress(TEST_API_KEY))
             {
                 TestSharedVrApi();
                 return; // Don't process other keys on the same frame
@@ -80,27 +79,27 @@ namespace UnityVRMod.Features.Debug
 
             IConfigElement selectedElement = _reloadableSettings[_selectedSettingIndex];
 
-            if (InputManager.GetKeyDown(NEXT_SETTING_KEY))
+            if (VRModKeybind.IsTrustedKeyPress(NEXT_SETTING_KEY))
             {
                 _selectedSettingIndex = (_selectedSettingIndex + 1) % _reloadableSettings.Count;
                 DisplaySelectedSetting();
             }
-            else if (InputManager.GetKeyDown(PREV_SETTING_KEY))
+            else if (VRModKeybind.IsTrustedKeyPress(PREV_SETTING_KEY))
             {
                 _selectedSettingIndex = (_selectedSettingIndex - 1 + _reloadableSettings.Count) % _reloadableSettings.Count;
                 DisplaySelectedSetting();
             }
-            else if (InputManager.GetKeyDown(INCREMENT_KEY))
+            else if (VRModKeybind.IsTrustedKeyPress(INCREMENT_KEY))
             {
                 ModifyValue(selectedElement, true);
                 DisplaySelectedSetting();
             }
-            else if (InputManager.GetKeyDown(DECREMENT_KEY))
+            else if (VRModKeybind.IsTrustedKeyPress(DECREMENT_KEY))
             {
                 ModifyValue(selectedElement, false);
                 DisplaySelectedSetting();
             }
-            else if (InputManager.GetKeyDown(TOGGLE_BOOL_KEY))
+            else if (VRModKeybind.IsTrustedKeyPress(TOGGLE_BOOL_KEY))
             {
                 if (selectedElement.ElementType == typeof(bool))
                 {

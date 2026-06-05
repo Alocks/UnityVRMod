@@ -10,6 +10,8 @@ namespace UnityVRMod.Core
 {
     public static class VRModCore
     {
+        private static readonly bool ENABLE_TEMP_LIVE_RELOAD_TESTER = true;
+
         public const string GUID = "com.newunitymodder.unityvrmod";
         public const string MOD_NAME = "Unity VR Mod";
         public const string VERSION = "0.1.0";
@@ -42,7 +44,10 @@ namespace UnityVRMod.Core
 
             Universe.Init(ConfigManager.Startup_Delay_Time?.Value ?? 1.0f, LateInit, UniverseLib_Log, universeConfig);
 
-            TemporaryLiveReloadTester.Initialize();
+            if (ENABLE_TEMP_LIVE_RELOAD_TESTER)
+            {
+                TemporaryLiveReloadTester.Initialize();
+            }
             VRModBehaviour.Setup();
             LogRuntimeDebug("Core VRModCore.Init phase complete.");
         }
@@ -77,7 +82,10 @@ namespace UnityVRMod.Core
             {
                 VRModKeybind.Update();
                 VrVisualizationFeature?.Update();
-                TemporaryLiveReloadTester.Update();
+                if (ENABLE_TEMP_LIVE_RELOAD_TESTER)
+                {
+                    TemporaryLiveReloadTester.Update();
+                }
             }
             catch (Exception ex)
             {

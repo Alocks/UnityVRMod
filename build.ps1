@@ -16,6 +16,25 @@ $NativeHelperDllBuildOutputBase = "UnityGraphicsHelper/x64"
 $NativeHelperDllName = "UnityGraphicsHelper.dll"
 $LibDir = "lib"
 
+function Resolve-MSBuildPath {
+    $msbuildCmd = Get-Command msbuild -ErrorAction SilentlyContinue
+    if ($msbuildCmd -and $msbuildCmd.Path) {
+        return $msbuildCmd.Path
+    }
+
+    $vswherePath = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswherePath) {
+        $found = & $vswherePath -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($found)) {
+            return $found
+        }
+    }
+
+    return $null
+}
+
+$MsbuildExe = Resolve-MSBuildPath
+
 # --- Define UniverseLib output paths ---
 $UniverseLibMonoDllPath = "UniverseLib/Release/UniverseLib.Mono/UniverseLib.Mono.dll"
 $UniverseLibIl2CppDllPath = "UniverseLib/Release/UniverseLib.Il2Cpp.Interop/UniverseLib.BIE.IL2CPP.Interop.dll"
@@ -37,8 +56,13 @@ if (Test-Path $NativeHelperProjectSolution) {
     Write-Host "Building Native C++ Helper ($NativeHelperDllName)..."
     $CppBuildConfig = if ($DebugHelper.IsPresent) { "Debug" } else { "Release" } 
 	Write-Host " Building $NativeHelperDllName with Configuration: $CppBuildConfig" 
-	
-	msbuild $NativeHelperProjectSolution /p:Configuration=$CppBuildConfig /p:Platform=x64 /t:Build 
+
+    if (-not $MsbuildExe) {
+        Write-Error "MSBuild was not found. Install Visual Studio Build Tools (MSBuild + C++ workload), or ensure msbuild is on PATH."
+        exit 1
+    }
+
+	& $MsbuildExe $NativeHelperProjectSolution /p:Configuration=$CppBuildConfig /p:Platform=x64 /t:Build 
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Native C++ Helper DLL build FAILED for configuration '$CppBuildConfig'. Aborting."
