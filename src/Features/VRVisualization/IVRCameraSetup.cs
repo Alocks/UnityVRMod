@@ -18,6 +18,7 @@
         void MoveRig(Vector3 localDelta);
         void RotateRig(float yawDegrees);
         void TiltRig(float pitchDegrees);
+        void AlignRigToCameraRotation(Camera mainCamera, bool useFullCameraRotation = false);
         void ResetRigToCenter();
         void SetCurrentPositionAsDefault();
 

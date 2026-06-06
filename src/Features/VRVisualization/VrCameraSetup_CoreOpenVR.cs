@@ -424,10 +424,47 @@ namespace UnityVRMod.Features.VrVisualization
             _vrRig.transform.Rotate(0f, yawDegrees, 0f, Space.World);
         }
 
+        public void AlignRigToCameraRotation(Camera mainCamera, bool useFullCameraRotation = false)
+        {
+            if (_vrRig == null || mainCamera == null) return;
+
+            Quaternion targetRotation = useFullCameraRotation
+                ? mainCamera.transform.rotation
+                : Quaternion.Euler(0, mainCamera.transform.eulerAngles.y, 0);
+
+            Vector3 anchorBefore = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.rotation = targetRotation;
+            Vector3 anchorAfter = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.position += anchorBefore - anchorAfter;
+        }
+
+        private Vector3 GetCurrentHeadAnchorWorldPosition()
+        {
+            if (_leftVrCameraGO != null && _rightVrCameraGO != null)
+            {
+                return (_leftVrCameraGO.transform.position + _rightVrCameraGO.transform.position) * 0.5f;
+            }
+
+            if (_leftVrCameraGO != null)
+            {
+                return _leftVrCameraGO.transform.position;
+            }
+
+            if (_rightVrCameraGO != null)
+            {
+                return _rightVrCameraGO.transform.position;
+            }
+
+            return _vrRig != null ? _vrRig.transform.position : Vector3.zero;
+        }
+
         public void TiltRig(float pitchDegrees)
         {
             if (_vrRig == null) return;
+            Vector3 anchorBefore = GetCurrentHeadAnchorWorldPosition();
             _vrRig.transform.Rotate(pitchDegrees, 0f, 0f, Space.Self);
+            Vector3 anchorAfter = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.position += anchorBefore - anchorAfter;
         }
 
         public void ResetRigToCenter()

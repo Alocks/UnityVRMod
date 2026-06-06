@@ -446,10 +446,15 @@ namespace UnityVRMod.Features.VrVisualization
                         || _currentlyTrackedOriginalCameraGO != mainCam.gameObject
                         || _currentlyTrackedOriginalCameraInstanceId != mainCam.GetInstanceID())
                     {
+                        bool useFullRotationNow = _useFullRotationOnNextRigSetup;
                         VRModCore.Log($"Game's main camera changed to '{mainCam.name}'. Re-creating VR rig.");
                         _cameraSetup.TeardownCameraRig();
                         CameraFinder.InvalidateCache(); // Invalidate since we are about to re-setup
-                        _cameraSetup.SetupCameraRig(mainCam, _useFullRotationOnNextRigSetup);
+                        _cameraSetup.SetupCameraRig(mainCam, useFullRotationNow);
+                        if (useFullRotationNow)
+                        {
+                            _cameraSetup.AlignRigToCameraRotation(mainCam, true);
+                        }
                         _useFullRotationOnNextRigSetup = false;
                         _lastRigSetupTime = Time.unscaledTime;
                         _currentlyTrackedOriginalCameraGO = mainCam.gameObject;
@@ -460,8 +465,13 @@ namespace UnityVRMod.Features.VrVisualization
                 }
                 else if (shouldRender)
                 {
+                    bool useFullRotationNow = _useFullRotationOnNextRigSetup;
                     VRModCore.Log($"Found game camera '{mainCam.name}'. Setting up VR rig.");
-                    _cameraSetup.SetupCameraRig(mainCam, _useFullRotationOnNextRigSetup);
+                    _cameraSetup.SetupCameraRig(mainCam, useFullRotationNow);
+                    if (useFullRotationNow)
+                    {
+                        _cameraSetup.AlignRigToCameraRotation(mainCam, true);
+                    }
                     _useFullRotationOnNextRigSetup = false;
                     _lastRigSetupTime = Time.unscaledTime;
                     _currentlyTrackedOriginalCameraGO = mainCam.gameObject;
