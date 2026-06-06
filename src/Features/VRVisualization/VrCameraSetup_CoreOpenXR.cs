@@ -28,6 +28,8 @@ namespace UnityVRMod.Features.VrVisualization
         private long _selectedSwapchainFormat = 0;
         private readonly List<ulong> _eyeSwapchains = [];
         private readonly List<List<IntPtr>> _eyeSwapchainImages = [];
+        private readonly List<int> _eyeRenderWidths = [];
+        private readonly List<int> _eyeRenderHeights = [];
         private ulong _appSpace = OpenXRConstants.XR_NULL_HANDLE;
         private bool _isSessionRunning = false;
         private XrReferenceSpaceType _appSpaceType = XrReferenceSpaceType.XR_REFERENCE_SPACE_TYPE_LOCAL;
@@ -55,6 +57,8 @@ namespace UnityVRMod.Features.VrVisualization
         private int _mainCameraCullingMask;
 
         private GameObject _currentlyTrackedOriginalCameraGO = null;
+        private Vector3 _initialRigPosition;
+        private Quaternion _initialRigRotation = Quaternion.identity;
         private float _lastCalculatedVerticalOffset;
         private static CommandBuffer _flushCommandBuffer;
 
@@ -225,22 +229,38 @@ namespace UnityVRMod.Features.VrVisualization
             _eyeSwapchains.Clear();
             _eyeSwapchainImages.Clear();
             _eyeSwapchainSRVs.Clear();
+            _eyeRenderWidths.Clear();
+            _eyeRenderHeights.Clear();
+
+            float resolutionScale = Mathf.Max(0.1f, ConfigManager.VrResolutionScale.Value);
 
             for (int i = 0; i < _viewConfigViews.Count; i++)
             {
                 var view = _viewConfigViews[i];
+                int scaledWidth = Math.Max(1, Mathf.RoundToInt(view.recommendedImageRectWidth * resolutionScale));
+                int scaledHeight = Math.Max(1, Mathf.RoundToInt(view.recommendedImageRectHeight * resolutionScale));
+
+                if (view.maxImageRectWidth > 0)
+                    scaledWidth = Math.Min(scaledWidth, (int)view.maxImageRectWidth);
+                if (view.maxImageRectHeight > 0)
+                    scaledHeight = Math.Min(scaledHeight, (int)view.maxImageRectHeight);
+
+                _eyeRenderWidths.Add(scaledWidth);
+                _eyeRenderHeights.Add(scaledHeight);
+
                 var swapchainCreateInfo = new XrSwapchainCreateInfo
                 {
                     type = XrStructureType.XR_TYPE_SWAPCHAIN_CREATE_INFO,
                     usageFlags = XrSwapchainUsageFlags.XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XrSwapchainUsageFlags.XR_SWAPCHAIN_USAGE_SAMPLED_BIT,
                     format = _selectedSwapchainFormat,
                     sampleCount = view.recommendedSwapchainSampleCount,
-                    width = view.recommendedImageRectWidth,
-                    height = view.recommendedImageRectHeight,
+                    width = (uint)scaledWidth,
+                    height = (uint)scaledHeight,
                     faceCount = 1,
                     arraySize = 1,
                     mipCount = 1
                 };
+                VRModCore.LogRuntimeDebug($"OpenXR eye {i} render scale={resolutionScale:F2}, final size={scaledWidth}x{scaledHeight}");
                 OpenXRHelper.CheckResult(OpenXRAPI.xrCreateSwapchain(_xrSession, in swapchainCreateInfo, out ulong scHandle), "xrCreateSwapchain");
                 _eyeSwapchains.Add(scHandle);
 
@@ -395,9 +415,10 @@ namespace UnityVRMod.Features.VrVisualization
             Camera currentEyeCamera = (eyeIndex == 0) ? _leftVrCamera : _rightVrCamera;
             RenderTexture currentIntermediateRT = (eyeIndex == 0) ? _leftEyeIntermediateRT : _rightEyeIntermediateRT;
             IntPtr nativeTextureResourcePtr = _eyeSwapchainImages[eyeIndex][(int)swapchainImageIndex];
-            XrViewConfigurationView viewConfig = _viewConfigViews[eyeIndex];
+            int renderWidth = _eyeRenderWidths.Count > eyeIndex ? _eyeRenderWidths[eyeIndex] : (int)_viewConfigViews[eyeIndex].recommendedImageRectWidth;
+            int renderHeight = _eyeRenderHeights.Count > eyeIndex ? _eyeRenderHeights[eyeIndex] : (int)_viewConfigViews[eyeIndex].recommendedImageRectHeight;
 
-            bool rtNeedsRecreation = (currentIntermediateRT == null || !currentIntermediateRT.IsCreated() || currentIntermediateRT.width != (int)viewConfig.recommendedImageRectWidth || currentIntermediateRT.height != (int)viewConfig.recommendedImageRectHeight);
+            bool rtNeedsRecreation = (currentIntermediateRT == null || !currentIntermediateRT.IsCreated() || currentIntermediateRT.width != renderWidth || currentIntermediateRT.height != renderHeight);
             if (rtNeedsRecreation)
             {
                 if (currentIntermediateRT != null) { currentIntermediateRT.Release(); UnityEngine.Object.Destroy(currentIntermediateRT); }
@@ -407,7 +428,7 @@ namespace UnityVRMod.Features.VrVisualization
                     : GraphicsFormat.B8G8R8A8_UNorm;
 
                 VRModCore.LogSpammyDebug($"Creating intermediate RenderTexture with format: {renderTextureFormat}");
-                currentIntermediateRT = new RenderTexture((int)viewConfig.recommendedImageRectWidth, (int)viewConfig.recommendedImageRectHeight, 24, renderTextureFormat);
+                currentIntermediateRT = new RenderTexture(renderWidth, renderHeight, 24, renderTextureFormat);
 
                 if (eyeIndex == 0) _leftEyeIntermediateRT = currentIntermediateRT; else _rightEyeIntermediateRT = currentIntermediateRT;
             }
@@ -453,12 +474,14 @@ namespace UnityVRMod.Features.VrVisualization
         {
             for (int i = 0; i < 2; i++)
             {
+                int renderWidth = _eyeRenderWidths.Count > i ? _eyeRenderWidths[i] : (int)_viewConfigViews[i].recommendedImageRectWidth;
+                int renderHeight = _eyeRenderHeights.Count > i ? _eyeRenderHeights[i] : (int)_viewConfigViews[i].recommendedImageRectHeight;
                 _projectionLayerViews[i].pose = _locatedViews[i].pose;
                 _projectionLayerViews[i].fov = _locatedViews[i].fov;
                 _projectionLayerViews[i].subImage.swapchain = _eyeSwapchains[i];
                 _projectionLayerViews[i].subImage.imageRect.offset = new XrOffset2Di { x = 0, y = 0 };
-                _projectionLayerViews[i].subImage.imageRect.extent.width = (int)_viewConfigViews[i].recommendedImageRectWidth;
-                _projectionLayerViews[i].subImage.imageRect.extent.height = (int)_viewConfigViews[i].recommendedImageRectHeight;
+                _projectionLayerViews[i].subImage.imageRect.extent.width = renderWidth;
+                _projectionLayerViews[i].subImage.imageRect.extent.height = renderHeight;
                 _projectionLayerViews[i].subImage.imageArrayIndex = 0;
                 Marshal.StructureToPtr(_projectionLayerViews[i], _pProjectionLayerViews + (i * Marshal.SizeOf<XrCompositionLayerProjectionView>()), false);
             }
@@ -469,7 +492,7 @@ namespace UnityVRMod.Features.VrVisualization
             Marshal.StructureToPtr(_projectionLayer, _pProjectionLayer, false);
         }
 
-        public void SetupCameraRig(Camera mainCamera)
+        public void SetupCameraRig(Camera mainCamera, bool useFullCameraRotation = false)
         {
             if (mainCamera == null)
             {
@@ -484,7 +507,9 @@ namespace UnityVRMod.Features.VrVisualization
             _currentlyTrackedOriginalCameraGO = mainCamera.gameObject;
 
             Vector3 targetPosition = mainCamera.transform.position;
-            Quaternion targetRotation = Quaternion.Euler(0, mainCamera.transform.eulerAngles.y, 0);
+            Quaternion targetRotation = useFullCameraRotation
+                ? mainCamera.transform.rotation
+                : Quaternion.Euler(0, mainCamera.transform.eulerAngles.y, 0);
 
             var poseOverrides = PoseParser.Parse(ConfigManager.ScenePoseOverrides.Value);
             string currentSceneName = mainCamera.gameObject.scene.name;
@@ -503,6 +528,8 @@ namespace UnityVRMod.Features.VrVisualization
                 targetRotation = Quaternion.Euler(finalRot);
             }
             _vrRig.transform.SetPositionAndRotation(targetPosition, targetRotation);
+            _initialRigPosition = targetPosition;
+            _initialRigRotation = targetRotation;
 
             _mainCameraClearFlags = mainCamera.clearFlags;
             _mainCameraBackgroundColor = mainCamera.backgroundColor;
@@ -662,6 +689,40 @@ namespace UnityVRMod.Features.VrVisualization
         public void SetUserEyeHeightOffset(float newOffset)
         {
             UpdateVerticalOffset();
+        }
+
+        public void MoveRig(Vector3 localDelta)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.position += _vrRig.transform.rotation * localDelta;
+        }
+
+        public void RotateRig(float yawDegrees)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.Rotate(0f, yawDegrees, 0f, Space.World);
+        }
+
+        public void TiltRig(float pitchDegrees)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.Rotate(pitchDegrees, 0f, 0f, Space.Self);
+        }
+
+        public void ResetRigToCenter()
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.SetPositionAndRotation(_initialRigPosition, _initialRigRotation);
+            _vrRig.transform.localScale = new Vector3(_currentAppliedRigScale, _currentAppliedRigScale, _currentAppliedRigScale);
+            _lastCalculatedVerticalOffset = 0f;
+            UpdateVerticalOffset();
+        }
+
+        public void SetCurrentPositionAsDefault()
+        {
+            if (_vrRig == null) return;
+            _initialRigPosition = _vrRig.transform.position - new Vector3(0f, _lastCalculatedVerticalOffset, 0f);
+            _initialRigRotation = _vrRig.transform.rotation;
         }
 
         public VrCameraRig GetVrCameraGameObjects()

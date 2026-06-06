@@ -22,6 +22,7 @@ namespace UnityVRMod.Config
         // --- VR Rendering Settings ---
         public static ConfigElement<float> VrCameraNearClipPlane;
         public static ConfigElement<float> VrWorldScale;
+        public static ConfigElement<float> VrResolutionScale;
         public static ConfigElement<float> VrUserEyeHeightOffset;
         public static ConfigElement<string> ScenePoseOverrides;
 
@@ -34,6 +35,13 @@ namespace UnityVRMod.Config
         // --- General Settings ---
         public static ConfigElement<bool> Force_Unlock_Mouse;
         public static ConfigElement<KeyCode> ToggleSafeModeKey;
+        public static ConfigElement<bool> EnableControllerCameraControl;
+        public static ConfigElement<float> ControllerCameraMoveSpeed;
+        public static ConfigElement<float> ControllerCameraTurnSpeed;
+        public static ConfigElement<float> ControllerCameraVerticalSpeed;
+        public static ConfigElement<float> ControllerCameraDeadzone;
+        public static ConfigElement<bool> EnableNativeControllerSuppression;
+        public static ConfigElement<float> NativeControllerSuppressionWarmupSecs;
         public static ConfigElement<SafeModeLevel> ActiveSafeModeLevel;
         public static ConfigElement<bool> EnableAutomaticSafeMode;
         public static ConfigElement<float> AutomaticSafeModeDurationSecs;
@@ -104,6 +112,9 @@ namespace UnityVRMod.Config
                 "Adjusts the perceived size of the world. >1 makes the world feel larger; <1 makes it feel smaller.", 1.0f);
             VrWorldScale.OnValueChanged += value => VRModCore.VrVisualizationFeature?.LiveUpdateWorldScale(value);
 
+            VrResolutionScale = new ConfigElement<float>("VR Resolution Scale",
+                "Multiplies VR eye render resolution. 1.0 = default, 0.75 = lower resolution, 1.5 = higher resolution.", 1.0f);
+
             VrUserEyeHeightOffset = new ConfigElement<float>("User Eye Height Offset",
                 "How much taller (+) or shorter (-) you want to feel in the virtual world (in meters). This value is scaled by World Scale.", 0.0f);
             VrUserEyeHeightOffset.OnValueChanged += value => VRModCore.VrVisualizationFeature?.LiveUpdateUserEyeHeightOffset(value);
@@ -127,6 +138,27 @@ namespace UnityVRMod.Config
 
             ToggleSafeModeKey = new ConfigElement<KeyCode>("Toggle Safe Mode Keybind",
                 "The key used to toggle VR rendering on and off.", KeyCode.F11);
+
+            EnableControllerCameraControl = new ConfigElement<bool>("Enable Controller Camera Control",
+                "If true, an XInput controller can move and rotate the VR camera rig while VR rendering is active.", true);
+
+            ControllerCameraMoveSpeed = new ConfigElement<float>("Controller Camera Move Speed",
+                "Base movement speed for controller-driven camera translation (meters per second).", 1.5f);
+
+            ControllerCameraTurnSpeed = new ConfigElement<float>("Controller Camera Turn Speed",
+                "Yaw rotation speed for controller-driven camera turning (degrees per second).", 120.0f);
+
+            ControllerCameraVerticalSpeed = new ConfigElement<float>("Controller Camera Vertical Speed",
+                "Vertical movement speed for controller-driven camera translation (meters per second).", 1.0f);
+
+            ControllerCameraDeadzone = new ConfigElement<float>("Controller Camera Deadzone",
+                "Input deadzone for controller sticks and triggers used to drive VR camera movement.", 0.18f);
+
+            EnableNativeControllerSuppression = new ConfigElement<bool>("Enable Native Controller Suppression",
+                "If true, native game controller input suppression is applied while controller camera control is active.", true);
+
+            NativeControllerSuppressionWarmupSecs = new ConfigElement<float>("Native Controller Suppression Warmup",
+                "Delay (seconds) after VR rig setup before native controller suppression is enabled. Helps avoid game startup/injection instability.", 0.75f);
 
             ActiveSafeModeLevel = new ConfigElement<SafeModeLevel>("Safe Mode Level",
                 "Defines the behavior of the Safe Mode toggle. Fast is quickest. RigReinit is safer but slower. FullVrReinit is the most aggressive and safest option for delicate games.", SafeModeLevel.RigReinitOnToggle);

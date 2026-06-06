@@ -19,6 +19,8 @@ namespace UnityVRMod.Features.VrVisualization
         private float _lastCalculatedVerticalOffset;
 
         private GameObject _currentlyTrackedOriginalCameraGO = null;
+        private Vector3 _initialRigPosition;
+        private Quaternion _initialRigRotation = Quaternion.identity;
 
         private CVRSystem _hmd = null;
         private CVRCompositor _compositor = null;
@@ -121,7 +123,7 @@ namespace UnityVRMod.Features.VrVisualization
             return (error == ETrackedPropertyError.TrackedProp_Success) ? buffer.ToString() : error.ToString();
         }
 
-        public void SetupCameraRig(Camera mainCamera)
+        public void SetupCameraRig(Camera mainCamera, bool useFullCameraRotation = false)
         {
             if (mainCamera == null)
             {
@@ -137,7 +139,9 @@ namespace UnityVRMod.Features.VrVisualization
             _currentlyTrackedOriginalCameraGO = mainCamera.gameObject;
 
             Vector3 targetPosition = mainCamera.transform.position;
-            Quaternion targetRotation = Quaternion.Euler(0, mainCamera.transform.eulerAngles.y, 0);
+            Quaternion targetRotation = useFullCameraRotation
+                ? mainCamera.transform.rotation
+                : Quaternion.Euler(0, mainCamera.transform.eulerAngles.y, 0);
 
             var poseOverrides = PoseParser.Parse(ConfigManager.ScenePoseOverrides.Value);
             string currentSceneName = mainCamera.gameObject.scene.name;
@@ -156,6 +160,8 @@ namespace UnityVRMod.Features.VrVisualization
                 targetRotation = Quaternion.Euler(finalRot);
             }
             _vrRig.transform.SetPositionAndRotation(targetPosition, targetRotation);
+            _initialRigPosition = targetPosition;
+            _initialRigRotation = targetRotation;
 
             _currentAppliedRigScale = 1.0f / Mathf.Max(0.01f, ConfigManager.VrWorldScale.Value);
             _vrRig.transform.localScale = new Vector3(_currentAppliedRigScale, _currentAppliedRigScale, _currentAppliedRigScale);
@@ -346,14 +352,18 @@ namespace UnityVRMod.Features.VrVisualization
 
         private bool SetupRenderTargets()
         {
-            uint width = _hmdRenderWidth;
-            uint height = _hmdRenderHeight;
+            float resolutionScale = Mathf.Max(0.1f, ConfigManager.VrResolutionScale.Value);
+            uint width = (uint)Math.Max(1, Mathf.RoundToInt(_hmdRenderWidth * resolutionScale));
+            uint height = (uint)Math.Max(1, Mathf.RoundToInt(_hmdRenderHeight * resolutionScale));
             int maxDim = ConfigManager.OpenVR_MaxRenderTargetDimension.Value;
             if (maxDim > 0)
             {
                 width = Math.Min(width, (uint)maxDim);
                 height = Math.Min(height, (uint)maxDim);
             }
+
+            VRModCore.LogRuntimeDebug($"OpenVR render target scale={resolutionScale:F2}, final size={width}x{height}");
+
             ReleaseRenderTargets();
             _leftEyeTexture = new RenderTexture((int)width, (int)height, 24, RenderTextureFormat.ARGB32);
             _rightEyeTexture = new RenderTexture((int)width, (int)height, 24, RenderTextureFormat.ARGB32);
@@ -400,6 +410,40 @@ namespace UnityVRMod.Features.VrVisualization
         public void SetUserEyeHeightOffset(float newOffset)
         {
             UpdateVerticalOffset();
+        }
+
+        public void MoveRig(Vector3 localDelta)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.position += _vrRig.transform.rotation * localDelta;
+        }
+
+        public void RotateRig(float yawDegrees)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.Rotate(0f, yawDegrees, 0f, Space.World);
+        }
+
+        public void TiltRig(float pitchDegrees)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.Rotate(pitchDegrees, 0f, 0f, Space.Self);
+        }
+
+        public void ResetRigToCenter()
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.SetPositionAndRotation(_initialRigPosition, _initialRigRotation);
+            _vrRig.transform.localScale = new Vector3(_currentAppliedRigScale, _currentAppliedRigScale, _currentAppliedRigScale);
+            _lastCalculatedVerticalOffset = 0f;
+            UpdateVerticalOffset();
+        }
+
+        public void SetCurrentPositionAsDefault()
+        {
+            if (_vrRig == null) return;
+            _initialRigPosition = _vrRig.transform.position - new Vector3(0f, _lastCalculatedVerticalOffset, 0f);
+            _initialRigRotation = _vrRig.transform.rotation;
         }
     }
 }
