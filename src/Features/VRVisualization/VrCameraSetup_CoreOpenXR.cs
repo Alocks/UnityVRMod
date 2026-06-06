@@ -697,6 +697,12 @@ namespace UnityVRMod.Features.VrVisualization
             _vrRig.transform.position += _vrRig.transform.rotation * localDelta;
         }
 
+        public void MoveRigWorld(Vector3 worldDelta)
+        {
+            if (_vrRig == null) return;
+            _vrRig.transform.position += worldDelta;
+        }
+
         public void RotateRig(float yawDegrees)
         {
             if (_vrRig == null) return;
@@ -742,6 +748,24 @@ namespace UnityVRMod.Features.VrVisualization
             if (_vrRig == null) return;
             Vector3 anchorBefore = GetCurrentHeadAnchorWorldPosition();
             _vrRig.transform.Rotate(pitchDegrees, 0f, 0f, Space.Self);
+            Vector3 anchorAfter = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.position += anchorBefore - anchorAfter;
+        }
+
+        public void RollRig(float rollDegrees)
+        {
+            if (_vrRig == null) return;
+            Vector3 anchorBefore = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.Rotate(0f, 0f, rollDegrees, Space.Self);
+            Vector3 anchorAfter = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.position += anchorBefore - anchorAfter;
+        }
+
+        public void RotateRigWorldDelta(Quaternion worldDeltaRotation)
+        {
+            if (_vrRig == null) return;
+            Vector3 anchorBefore = GetCurrentHeadAnchorWorldPosition();
+            _vrRig.transform.rotation = worldDeltaRotation * _vrRig.transform.rotation;
             Vector3 anchorAfter = GetCurrentHeadAnchorWorldPosition();
             _vrRig.transform.position += anchorBefore - anchorAfter;
         }

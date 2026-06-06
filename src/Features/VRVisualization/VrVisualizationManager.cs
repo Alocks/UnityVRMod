@@ -31,9 +31,15 @@ namespace UnityVRMod.Features.VrVisualization
         private int _forcedCameraInstanceId = 0;
         private float _lastRigSetupTime = -1000f;
         private bool _useFullRotationOnNextRigSetup = false;
+        private int _followSourceCameraInstanceId = 0;
+        private Vector3 _lastFollowSourceCameraPosition = Vector3.zero;
+        private Quaternion _lastFollowSourceCameraRotation = Quaternion.identity;
+        private bool _followSourceCameraFullRotation = false;
 
         private const float ControllerWorldScaleStep = 0.02f;
         private const float ControllerWorldScaleRepeatInterval = 0.10f;
+        private const float MinSourceCameraPositionDelta = 0.00005f;
+        private const float MinSourceCameraYawDelta = 0.01f;
 
         private UnityAction<Scene, Scene> _sceneChangedActionDelegate;
 
@@ -297,6 +303,63 @@ namespace UnityVRMod.Features.VrVisualization
             return Mathf.Sign(value) * Mathf.Clamp01(normalized);
         }
 
+        private void ResetSourceCameraFollowState()
+        {
+            _followSourceCameraInstanceId = 0;
+            _lastFollowSourceCameraPosition = Vector3.zero;
+            _lastFollowSourceCameraRotation = Quaternion.identity;
+        }
+
+        private void PrimeSourceCameraFollow(Camera sourceCamera)
+        {
+            if (sourceCamera == null)
+            {
+                ResetSourceCameraFollowState();
+                return;
+            }
+
+            _followSourceCameraInstanceId = sourceCamera.GetInstanceID();
+            _lastFollowSourceCameraPosition = sourceCamera.transform.position;
+            _lastFollowSourceCameraRotation = sourceCamera.transform.rotation;
+        }
+
+        private void UpdateSourceCameraFollow(Camera sourceCamera)
+        {
+            if (sourceCamera == null || _cameraSetup == null || !_cameraSetup.IsVrAvailable) return;
+
+            int sourceCameraId = sourceCamera.GetInstanceID();
+            if (_followSourceCameraInstanceId != sourceCameraId)
+            {
+                PrimeSourceCameraFollow(sourceCamera);
+                return;
+            }
+
+            Vector3 currentPosition = sourceCamera.transform.position;
+            Quaternion currentRotation = sourceCamera.transform.rotation;
+
+            Vector3 worldDelta = currentPosition - _lastFollowSourceCameraPosition;
+            if (worldDelta.sqrMagnitude > MinSourceCameraPositionDelta)
+            {
+                _cameraSetup.MoveRigWorld(worldDelta);
+            }
+
+            if (_followSourceCameraFullRotation)
+            {
+                _cameraSetup.AlignRigToCameraRotation(sourceCamera, true);
+            }
+            else
+            {
+                float yawDelta = Mathf.DeltaAngle(_lastFollowSourceCameraRotation.eulerAngles.y, currentRotation.eulerAngles.y);
+                if (Mathf.Abs(yawDelta) > MinSourceCameraYawDelta)
+                {
+                    _cameraSetup.RotateRig(yawDelta);
+                }
+            }
+
+            _lastFollowSourceCameraPosition = currentPosition;
+            _lastFollowSourceCameraRotation = currentRotation;
+        }
+
         private void UpdateGameControllerSuppression(bool shouldSuppress)
         {
             float warmupSecs = Mathf.Max(0f, ConfigManager.NativeControllerSuppressionWarmupSecs.Value);
@@ -455,6 +518,8 @@ namespace UnityVRMod.Features.VrVisualization
                         {
                             _cameraSetup.AlignRigToCameraRotation(mainCam, true);
                         }
+                        _followSourceCameraFullRotation = useFullRotationNow;
+                        PrimeSourceCameraFollow(mainCam);
                         _useFullRotationOnNextRigSetup = false;
                         _lastRigSetupTime = Time.unscaledTime;
                         _currentlyTrackedOriginalCameraGO = mainCam.gameObject;
@@ -472,6 +537,8 @@ namespace UnityVRMod.Features.VrVisualization
                     {
                         _cameraSetup.AlignRigToCameraRotation(mainCam, true);
                     }
+                    _followSourceCameraFullRotation = useFullRotationNow;
+                    PrimeSourceCameraFollow(mainCam);
                     _useFullRotationOnNextRigSetup = false;
                     _lastRigSetupTime = Time.unscaledTime;
                     _currentlyTrackedOriginalCameraGO = mainCam.gameObject;
@@ -486,6 +553,7 @@ namespace UnityVRMod.Features.VrVisualization
                 _cameraSetup.TeardownCameraRig();
                 _currentlyTrackedOriginalCameraGO = null;
                 _currentlyTrackedOriginalCameraInstanceId = 0;
+                ResetSourceCameraFollowState();
                 CameraFinder.InvalidateCache();
             }
 
@@ -500,6 +568,7 @@ namespace UnityVRMod.Features.VrVisualization
                     UpdateGameControllerSuppression(false);
                 }
 
+                UpdateSourceCameraFollow(mainCam);
                 UpdateControllerCameraControl(rigIsSetUp);
                 _cameraSetup.UpdatePoses();
             }

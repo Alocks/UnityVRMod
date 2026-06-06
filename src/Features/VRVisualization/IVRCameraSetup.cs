@@ -16,8 +16,11 @@
         VrCameraRig GetVrCameraGameObjects();
         void UpdatePoses();
         void MoveRig(Vector3 localDelta);
+        void MoveRigWorld(Vector3 worldDelta);
         void RotateRig(float yawDegrees);
         void TiltRig(float pitchDegrees);
+        void RollRig(float rollDegrees);
+        void RotateRigWorldDelta(Quaternion worldDeltaRotation);
         void AlignRigToCameraRotation(Camera mainCamera, bool useFullCameraRotation = false);
         void ResetRigToCenter();
         void SetCurrentPositionAsDefault();
